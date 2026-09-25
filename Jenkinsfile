@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    environment {
+        REGISTRY_CREDS = 'docker-hub-credentials'
+        IMAGE_NAME     = "sanikaprog/student-accommodation-system"
+        IMAGE_TAG      = "${env.BUILD_NUMBER}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -13,43 +19,61 @@ pipeline {
                 nodejs('Node-18') { 
                     sh 'npm ci'
                 }
-                sh 'docker build -t student-accommodation-system .'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Test') {
             steps {
-                echo 'TODO: npm test (Jest + Supertest + mongodb-memory-server), publish coverage/junit reports'
+                nodejs('Node-18') {
+                    sh 'npm test'
+                }
             }
         }
 
         stage('Code Quality') {
             steps {
-                echo 'TODO: eslint + SonarQube/SonarCloud scan'
+                nodejs('Node-18') {
+                    sh 'npm run lint || true'
+                }
+                withSonarQubeEnv('SonarQube') {
+                    sh 'npx sonar-scanner'
+                }
             }
         }
 
         stage('Security') {
             steps {
-                echo 'TODO: npm audit / Snyk / Trivy scan of image and dependencies'
+                nodejs('Node-18') {
+                    sh 'npm audit --audit-level=high || true'
+                }
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'TODO: docker-compose up (app + mongo) to a test environment'
+                sh 'docker-compose down'
+                sh 'docker-compose up -d --build'
             }
         }
 
         stage('Release') {
             steps {
-                echo 'TODO: tag image, promote to production registry/environment'
+                sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+                withCredentials([usernamePassword(credentialsId: "${REGISTRY_CREDS}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh "docker login -u ${USER} -p ${PASS}"
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker push ${IMAGE_NAME}:latest"
+                }
             }
         }
 
         stage('Monitoring') {
             steps {
-                echo 'TODO: verify /health and /metrics, register with Prometheus/Datadog, alert rules'
+                sh 'sleep 15'
+                sh 'curl -f http://localhost:5000/health'
+                sh 'curl -f http://localhost:5000/metrics'
             }
         }
     }
