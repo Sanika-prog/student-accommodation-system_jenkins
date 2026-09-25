@@ -1,0 +1,30 @@
+{
+  "name": "hostel-management-app",
+  "version": "1.0.0",
+  "description": "Hostel Management System - Auth, Room Management, Application modules",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "npm ci --omit=dev --ignore-scripts && echo 'Build complete: dependencies installed'",
+    "test": "jest --coverage --detectOpenHandles --runInBand",
+    "lint": "eslint src server.js --ext .js",
+    "lint:fix": "eslint src server.js --ext .js --fix"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.5.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5",
+    "prom-client": "^15.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4",
+    "mongodb-memory-server": "^9.4.1",
+    "eslint": "^8.57.0"
+  }
+}

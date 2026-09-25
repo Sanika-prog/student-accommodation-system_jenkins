@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Melbourne Student Accommodation System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,680&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div class="frame" id="frame">
+
+  <header class="topbar" id="topbar" hidden>
+    <div class="brand">
+      <span class="brand-mark">MSA</span>
+      <span class="brand-name">Melbourne Student Accommodation</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="rooms">Rooms</button>
+      <button class="tab" data-view="applications">My applications</button>
+      <button class="tab" data-view="admin" id="adminTab" hidden>Admin desk</button>
+    </nav>
+    <div class="session" id="session">
+      <span class="who" id="who"></span>
+      <button class="ghost-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <main id="app">
+
+    <!-- AUTH GATE -->
+    <section class="gate" id="gate">
+      <div class="gate-side">
+        <div class="gate-side-inner">
+          <div class="brand brand-on-dark">
+            <span class="brand-mark">MSA</span>
+            <span class="brand-name">Melbourne Student<br/>Accommodation</span>
+          </div>
+          <p class="gate-tagline">Rooms across the city's student blocks — applied for, tracked, and confirmed in one place.</p>
+          <svg class="skyline" viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="0" y="120" width="46" height="80" fill="#3A3C33"/>
+            <rect x="50" y="70" width="34" height="130" fill="#4B4E40"/>
+            <rect x="88" y="100" width="30" height="100" fill="#3A3C33"/>
+            <rect x="122" y="40" width="40" height="160" fill="#5A5E4C"/>
+            <rect x="166" y="85" width="26" height="115" fill="#3A3C33"/>
+            <rect x="196" y="60" width="36" height="140" fill="#4B4E40"/>
+            <rect x="236" y="105" width="28" height="95" fill="#3A3C33"/>
+            <rect x="268" y="30" width="42" height="170" fill="#5A5E4C"/>
+            <rect x="314" y="95" width="30" height="105" fill="#3A3C33"/>
+            <g fill="#D8A15C" opacity="0.85">
+              <rect x="10" y="135" width="7" height="9"/><rect x="24" y="135" width="7" height="9"/>
+              <rect x="10" y="155" width="7" height="9"/><rect x="24" y="155" width="7" height="9"/>
+              <rect x="58" y="85" width="7" height="9"/><rect x="72" y="85" width="7" height="9"/>
+              <rect x="58" y="105" width="7" height="9"/><rect x="72" y="105" width="7" height="9"/>
+              <rect x="130" y="55" width="7" height="9"/><rect x="146" y="55" width="7" height="9"/>
+              <rect x="130" y="80" width="7" height="9"/><rect x="146" y="80" width="7" height="9"/>
+              <rect x="205" y="75" width="7" height="9"/><rect x="219" y="75" width="7" height="9"/>
+              <rect x="276" y="45" width="7" height="9"/><rect x="292" y="45" width="7" height="9"/>
+              <rect x="276" y="70" width="7" height="9"/><rect x="292" y="70" width="7" height="9"/>
+            </g>
+          </svg>
+          <p class="gate-caption">Melbourne, VIC</p>
+        </div>
+      </div>
+
+      <div class="gate-form-side">
+        <div class="gate-card">
+          <p class="eyebrow">Resident access</p>
+          <h1>A room here starts with a login.</h1>
+          <div class="gate-tabs">
+            <button class="gate-tab active" data-form="login">Sign in</button>
+            <button class="gate-tab" data-form="register">Register</button>
+          </div>
+
+          <form id="loginForm" class="gate-form">
+            <label>Email
+              <input type="email" name="email" required placeholder="you@deakin.edu.au" />
+            </label>
+            <label>Password
+              <input type="password" name="password" required placeholder="••••••••" />
+            </label>
+            <button type="submit" class="primary-btn">Sign in</button>
+            <p class="form-note" id="loginNote"></p>
+          </form>
+
+          <form id="registerForm" class="gate-form" hidden>
+            <label>Full name
+              <input type="text" name="name" required placeholder="Jane Doe" />
+            </label>
+            <label>Email
+              <input type="email" name="email" required placeholder="you@deakin.edu.au" />
+            </label>
+            <label>Password
+              <input type="password" name="password" required minlength="6" placeholder="6+ characters" />
+            </label>
+            <label>I am registering as
+              <select name="role">
+                <option value="student">Student, looking for a room</option>
+                <option value="admin">Warden / hostel admin</option>
+              </select>
+            </label>
+            <button type="submit" class="primary-btn">Create account</button>
+            <p class="form-note" id="registerNote"></p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROOMS VIEW -->
+    <section class="view" id="view-rooms" hidden>
+      <div class="view-head">
+        <div>
+          <p class="eyebrow">Available now</p>
+          <h2>The room board</h2>
+        </div>
+        <button class="primary-btn small" id="addRoomBtn" hidden>+ Add room</button>
+      </div>
+      <div class="room-grid" id="roomGrid"></div>
+    </section>
+
+    <!-- APPLICATIONS VIEW -->
+    <section class="view" id="view-applications" hidden>
+      <div class="view-head">
+        <div>
+          <p class="eyebrow">Your history</p>
+          <h2>My applications</h2>
+        </div>
+      </div>
+      <div class="app-list" id="appList"></div>
+    </section>
+
+    <!-- ADMIN VIEW -->
+    <section class="view" id="view-admin" hidden>
+      <div class="view-head">
+        <div>
+          <p class="eyebrow">Warden queue</p>
+          <h2>Applications to review</h2>
+        </div>
+      </div>
+      <div class="app-list" id="adminAppList"></div>
+    </section>
+
+  </main>
+
+<div class="toast" id="toast" hidden></div>
+
+<dialog id="roomDialog">
+  <form id="roomForm" method="dialog">
+    <h3>Add a room</h3>
+    <label>Room number
+      <input type="text" name="roomNumber" required placeholder="B-204" />
+    </label>
+    <label>Block
+      <input type="text" name="block" required placeholder="Birch Block" />
+    </label>
+    <label>Capacity
+      <input type="number" name="capacity" required min="1" value="2" />
+    </label>
+    <label>Price per semester (AUD)
+      <input type="number" name="pricePerSemester" required min="0" value="2200" />
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="ghost-btn" id="cancelRoomBtn">Cancel</button>
+      <button type="submit" class="primary-btn">Save room</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>
