@@ -1,13 +1,7 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = "student-accommodation-system"
-        IMAGE_TAG  = "${env.BUILD_NUMBER}"
-    }
-
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -16,7 +10,10 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo 'TODO: npm ci, docker build, tag image'
+                nodejs('Node-18') { 
+                    sh 'npm ci'
+                }
+                sh 'docker build -t student-accommodation-system .'
             }
         }
 
