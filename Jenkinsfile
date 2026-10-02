@@ -86,26 +86,26 @@ pipeline {
         }
 
         // 4. SECURITY
+                // 4. SECURITY
         stage('Security') {
             steps {
                 nodejs(env.NODE_TOOL) {
                     sh 'npm audit --json > npm-audit.json || true'
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh 'npm audit --omit=dev --audit-level=high'
-                    }
+                    sh 'npm audit --omit=dev --audit-level=high'
                 }
                 sh '''
+                    if docker run --rm -v trivy-cache:/c alpine test -f /c/trivy/db/trivy.db; then
+                        UPD="--skip-db-update"
+                    else
+                        UPD="--db-repository ghcr.io/aquasecurity/trivy-db:2"
+                    fi
                     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ \
-                      aquasec/trivy:latest image --no-progress --severity HIGH,CRITICAL --exit-code 0 \
-                      $IMAGE_NAME:$IMAGE_TAG | tee trivy-report.txt
+                      aquasec/trivy:latest image $UPD --skip-java-db-update --no-progress --timeout 30m \
+                      --severity HIGH,CRITICAL --exit-code 0 $IMAGE_NAME:$IMAGE_TAG | tee trivy-report.txt
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ \
+                      aquasec/trivy:latest image --skip-db-update --skip-java-db-update --no-progress --timeout 30m \
+                      --severity CRITICAL --ignore-unfixed --exit-code 1 $IMAGE_NAME:$IMAGE_TAG
                 '''
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    sh '''
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ \
-                          aquasec/trivy:latest image --no-progress --severity CRITICAL --ignore-unfixed --exit-code 1 \
-                          $IMAGE_NAME:$IMAGE_TAG
-                    '''
-                }
             }
             post {
                 always { archiveArtifacts artifacts: 'npm-audit.json,trivy-report.txt', allowEmptyArchive: true }
