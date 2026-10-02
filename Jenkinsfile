@@ -36,17 +36,28 @@ pipeline {
         }
 
         // 2. TEST
+               // 2. TEST
         stage('Test') {
             steps {
                 nodejs(env.NODE_TOOL) {
                     sh '''
-                        node -e "const {MongoMemoryServer}=require('mongodb-memory-server'); MongoMemoryServer.create().then(m=>m.stop()).then(()=>console.log('mongod binary ready'))" || true
+                        docker rm -f sas-test-mongo > /dev/null 2>&1 || true
+                        NET=$(docker inspect jenkins -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')
+                        docker run -d --name sas-test-mongo --network $NET mongo:6
+                        for i in $(seq 1 30); do
+                            docker exec sas-test-mongo mongosh --quiet --eval "db.runCommand({ping:1}).ok" > /dev/null 2>&1 && break
+                            sleep 2
+                        done
+                        export TEST_MONGO_URI=mongodb://sas-test-mongo:27017
                         npm test -- --ci
                     '''
                 }
             }
             post {
-                always { archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true }
+                always {
+                    sh 'docker rm -f sas-test-mongo || true'
+                    archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true
+                }
             }
         }
 
