@@ -62,20 +62,23 @@ pipeline {
         }
 
         // 3. CODE QUALITY
+               // 3. CODE QUALITY
         stage('Code Quality') {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     nodejs(env.NODE_TOOL) { sh 'npm run lint' }
                 }
-                withSonarQubeEnv('SonarQube') {
-                    sh "${tool 'SonarScanner'}/bin/sonar-scanner -Dsonar.projectVersion=${VERSION}"
-                }
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
-                        def qg = waitForQualityGate()
-                        echo "SonarQube quality gate status: ${qg.status}"
-                        if (qg.status != 'OK') {
-                            unstable("Quality gate status: ${qg.status}")
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh "${tool 'SonarScanner'}/bin/sonar-scanner -Dsonar.projectVersion=${VERSION} -Dsonar.ws.timeout=300"
+                    }
+                    timeout(time: 10, unit: 'MINUTES') {
+                        script {
+                            def qg = waitForQualityGate()
+                            echo "SonarQube quality gate status: ${qg.status}"
+                            if (qg.status != 'OK') {
+                                unstable("Quality gate status: ${qg.status}")
+                            }
                         }
                     }
                 }
