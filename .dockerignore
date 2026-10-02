@@ -1,0 +1,7 @@
+node_modules
+coverage
+.git
+.env
+*.log
+npm-audit.json
+trivy-report.txt

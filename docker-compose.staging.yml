@@ -1,0 +1,22 @@
+name: sas-staging
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    container_name: sas-staging-app
+    restart: on-failure
+    ports:
+      - "5001:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=staging
+      - MONGO_URI=mongodb://mongo:27017/sas_staging
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+    depends_on:
+      - mongo
+  mongo:
+    image: mongo:6
+    container_name: sas-staging-mongo
+    volumes:
+      - staging-mongo-data:/data/db
+volumes:
+  staging-mongo-data:
