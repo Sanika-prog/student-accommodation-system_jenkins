@@ -4,16 +4,15 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
-        timeout(time: 60, unit: 'MINUTES')
+        timeout(time: 90, unit: 'MINUTES')
     }
 
     environment {
-        IMAGE_NAME      = 'sanikaprog/student-accommodation-system'
-        REGISTRY_CREDS  = 'docker-hub-credentials'
-        IMAGE_TAG       = "${env.BUILD_NUMBER}"
-        VERSION         = "1.0.${env.BUILD_NUMBER}"
-        NODE_TOOL       = 'Node-20'
-        MONGOMS_VERSION = '7.0.14'
+        IMAGE_NAME     = 'sanikaprog/student-accommodation-system'
+        REGISTRY_CREDS = 'docker-hub-credentials'
+        IMAGE_TAG      = "${env.BUILD_NUMBER}"
+        VERSION        = "1.0.${env.BUILD_NUMBER}"
+        NODE_TOOL      = 'Node-20'
     }
 
     stages {
@@ -24,19 +23,20 @@ pipeline {
         // 1. BUILD
         stage('Build') {
             steps {
-                nodejs(env.NODE_TOOL) { sh 'npm ci' }
-                sh '''
-                    docker build \
-                      --label build=$BUILD_NUMBER \
-                      --label commit=$(git rev-parse --short HEAD) \
-                      -t $IMAGE_NAME:$IMAGE_TAG .
-                    docker image inspect $IMAGE_NAME:$IMAGE_TAG --format 'Built image {{.Id}} ({{.Size}} bytes)'
-                '''
+                nodejs(env.NODE_TOOL) { sh 'npm ci --prefer-offline --no-audit --no-fund' }
+                retry(2) {
+                    sh '''
+                        docker build \
+                          --label build=$BUILD_NUMBER \
+                          --label commit=$(git rev-parse --short HEAD) \
+                          -t $IMAGE_NAME:$IMAGE_TAG .
+                        docker image inspect $IMAGE_NAME:$IMAGE_TAG --format 'Built image {{.Id}} ({{.Size}} bytes)'
+                    '''
+                }
             }
         }
 
-        // 2. TEST
-               // 2. TEST
+        // 2. TEST (real MongoDB container, fails the build on any test failure)
         stage('Test') {
             steps {
                 nodejs(env.NODE_TOOL) {
@@ -61,32 +61,28 @@ pipeline {
             }
         }
 
-        // 3. CODE QUALITY
-               // 3. CODE QUALITY
+        // 3. CODE QUALITY (ESLint gate + SonarQube quality gate)
         stage('Code Quality') {
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    nodejs(env.NODE_TOOL) { sh 'npm run lint' }
-                }
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    withSonarQubeEnv('SonarQube') {
-                        sh "${tool 'SonarScanner'}/bin/sonar-scanner -Dsonar.projectVersion=${VERSION} -Dsonar.ws.timeout=300"
-                    }
-                    timeout(time: 10, unit: 'MINUTES') {
-                        script {
-                            def qg = waitForQualityGate()
-                            echo "SonarQube quality gate status: ${qg.status}"
-                            if (qg.status != 'OK') {
-                                unstable("Quality gate status: ${qg.status}")
-                            }
+                nodejs(env.NODE_TOOL) { sh 'npm run lint' }
+                script {
+                    def sonarUp = sh(returnStatus: true,
+                        script: "curl -sf -m 15 http://sonarqube:9000/api/system/status | grep -q '\"status\":\"UP\"'") == 0
+                    if (sonarUp) {
+                        withSonarQubeEnv('SonarQube') {
+                            sh "${tool 'SonarScanner'}/bin/sonar-scanner -Dsonar.projectVersion=${VERSION} -Dsonar.scanner.socketTimeout=300"
                         }
+                        timeout(time: 10, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: true
+                        }
+                    } else {
+                        unstable('SonarQube is not available')
                     }
                 }
             }
         }
 
-        // 4. SECURITY
-                // 4. SECURITY
+        // 4. SECURITY (npm audit gate + Trivy image scan with a CRITICAL gate)
         stage('Security') {
             steps {
                 nodejs(env.NODE_TOOL) {
@@ -112,11 +108,13 @@ pipeline {
             }
         }
 
-        // 5. DEPLOY (staging, port 5001)
+        // 5. DEPLOY (staging on port 5001, then smoke tests)
         stage('Deploy') {
             steps {
                 withCredentials([string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET')]) {
-                    sh 'APP_IMAGE=$IMAGE_NAME:$IMAGE_TAG docker compose -f docker-compose.staging.yml up -d --remove-orphans'
+                    retry(2) {
+                        sh 'APP_IMAGE=$IMAGE_NAME:$IMAGE_TAG docker compose -f docker-compose.staging.yml up -d --remove-orphans'
+                    }
                     script { waitHealthy('sas-staging-app') }
                     sh '''
                         docker exec sas-staging-app wget -qO- http://localhost:5000/health
@@ -127,7 +125,7 @@ pipeline {
             }
         }
 
-        // 6. RELEASE (version tag, push, production on port 5000, rollback on failure)
+        // 6. RELEASE (version tags, Docker Hub, production on port 5000, automatic rollback)
         stage('Release') {
             steps {
                 script {
@@ -152,7 +150,9 @@ pipeline {
                 withCredentials([string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET')]) {
                     script {
                         try {
-                            sh 'APP_IMAGE=$IMAGE_NAME:v$VERSION docker compose -f docker-compose.prod.yml up -d --remove-orphans'
+                            retry(2) {
+                                sh 'APP_IMAGE=$IMAGE_NAME:v$VERSION docker compose -f docker-compose.prod.yml up -d --remove-orphans'
+                            }
                             waitHealthy('sas-prod-app')
                         } catch (err) {
                             if (env.PREV_IMAGE?.trim()) {
@@ -166,16 +166,19 @@ pipeline {
             }
         }
 
-        // 7. MONITORING
+        // 7. MONITORING (Prometheus scraping /metrics, alert rules loaded)
         stage('Monitoring') {
             steps {
                 sh '''
                     for i in 1 2 3 4 5; do docker exec sas-prod-app wget -qO- http://localhost:5000/health > /dev/null; done
-                    sleep 20
+                    for i in $(seq 1 12); do
+                        docker exec sas-prod-prometheus wget -qO- http://localhost:9090/api/v1/targets | grep -q '"health":"up"' && break
+                        sleep 5
+                    done
                     docker exec sas-prod-prometheus wget -qO- http://localhost:9090/-/healthy
                     docker exec sas-prod-prometheus wget -qO- http://localhost:9090/api/v1/targets | grep -q '"health":"up"'
-                    echo "Alert rules state:"
-                    docker exec sas-prod-prometheus wget -qO- http://localhost:9090/api/v1/alerts
+                    echo "Alert rules loaded:"
+                    docker exec sas-prod-prometheus wget -qO- http://localhost:9090/api/v1/rules | grep -o '"name":"[A-Za-z0-9]*"' | sort -u
                 '''
             }
         }
@@ -190,7 +193,7 @@ pipeline {
 
 def waitHealthy(String container) {
     sh """
-        for i in \$(seq 1 40); do
+        for i in \$(seq 1 60); do
             s=\$(docker inspect -f '{{.State.Health.Status}}' ${container} 2>/dev/null || echo starting)
             echo "${container}: \$s"
             [ "\$s" = "healthy" ] && exit 0
